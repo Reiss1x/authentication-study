@@ -1,6 +1,6 @@
 import express from "express";
 import { AppDataSource } from "./data-source";
-import routes from "./Routes";
+import routes from "./routes";
 
 
 
