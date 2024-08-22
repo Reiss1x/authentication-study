@@ -1,12 +1,30 @@
-import {Request, Response} from "express";
+import e, {Request, Response} from "express";
 import { UserRepository } from "../repositories/UserRepository";
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken'
 
 export class UserController {
     async create(req: Request, res: Response){
         try {
-            const newUser = UserRepository.create(req.body)
+            const { name, email, password, active} = req.body
+            const existingEmail = await UserRepository.findOneBy({email})
+
+            if(existingEmail) {
+                return res.status(400).json({message: "Email already in use."})
+            }
+           
+            const pass = await bcrypt.hash(password, 8)
+            const newUser = UserRepository.create({
+                name, 
+                email, 
+                password: pass, 
+                active
+            })
             await UserRepository.save(newUser)
-            return res.status(201).json(newUser);
+
+            const {password: _, ...user} = newUser
+
+            return res.status(201).json(user);
             
         } catch (error) {
             return res.status(500).json({message: "Error creating user"})
@@ -15,19 +33,38 @@ export class UserController {
     }
 
     async get(req: Request, res: Response){
-        const { userId } = req.params;
-        const User = await UserRepository.findOneBy({id: Number(userId)})
+        const { email, password } = req.body
+        const user = await UserRepository.findOneBy({email})
+        
+        
         try {
+
             
-            if(User) {
-                return res.status(200).json(User);
+            
+            if(!user) {
+                return res.status(500).json({message: "Wrong E-mail Address."})
             }
-            return res.status(500).json({message: `User ${userId} not found.`})
+
+            const check = await bcrypt.compare(password, user.password);
+
+            if (!check){
+                return res.status(500).json({message: "Wrong Password."})
+            }
+
+            const token = jwt.sign({id: user.id}, process.env.JWT_PASS ?? '', {
+                expiresIn: '1h'
+            })
+
+            const {password: _, ...userRes} = user
+
+            return res.json({
+                user: userRes,
+                token: token,
+            })
             
         } catch (error) {
-            console.log(error);
             return res.status(500).json({message: "Error fetching user."})
-        }
+        } 
     }
     
     async delete(req: Request, res: Response){
